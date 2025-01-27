@@ -1,0 +1,269 @@
+---
+title: |
+ | Data Visualization Project 3
+ | Data Storytelling: Open Project
+subtitle: |
+ | Electric Vehicles: Are they Worth the Hassle?
+author: | 
+ | Merim Tojaga
+ | Northeastern University
+ | INSH 5302: Information Design and Visual Analytics
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    code_download: true
+    fig_caption: yes
+    df_print: kable
+    theme: lumen
+    toc: yes
+    toc_float:
+      collapsed: false
+---
+
+# Introduction
+
+The data analysis I conducted was both broad and focused when it came to the details of price and time spent charging. I focused on the people collecting the data to highlight the potential bias in the data set and to qualify my assumptions later in the analysis. I created several graphs examining the same metrics to provide a broad view of how these vehicles were being used. I then turned my attention to the details that most readers would care about: time and money. For both of these graphs, I constructed easy-to-read, complex graphs where no extra information is needed to describe the data, but it is provided anyway. All in all, I believe the info graphic I created conveys a relevant message, and the graphs all lead to a clear explanation.
+
+## Data
+### Load Libraries and Packages
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(moderndive)
+library(pheatmap)
+library(tidyr)
+library(viridis)
+library(ggplot2)
+library(plot3D)
+library(plotly)
+library(hexbin)
+library(plotrix)
+library(treemap)
+library(RColorBrewer)
+library(reticulate)
+library(reticulate)
+library(htmlwidgets)
+library(mosaic)
+```
+
+### Description of data
+
+> Topic or Package: Electric Vehicle Charging. It takes data from 85 users about their experience charging an EV. Has several Metrics ripe for analysis. I wanted this data set because I love cars and am very familiar with all the pros and cons of an Electric Vehicle.
+
+> Data set: EV Charging in Moderndive Package. 
+
+### Load and Clean Data
+
+```{r, message=FALSE, warning=FALSE}
+df <- moderndive::ev_charging
+
+df_cleaned <- df %>%
+  dplyr::select(-session_id, -created, -ended, -location_id, -manager_vehicle, -platform, -reported_zip, -start_time, -end_time, -station_id)
+
+df_cleaned$user_id <- as.factor(df_cleaned$user_id)
+User_ID_counts <- table(df_cleaned$user_id)
+user_df <- data.frame(User_ID_counts)
+colnames(user_df) <- c("user_id", "count")
+df_cleaned <- merge(df_cleaned, user_df, by = "user_id", all.x = TRUE)
+```
+
+### Preview Data
+
+```{r, message=FALSE, warning=FALSE}
+head(df_cleaned, 10)
+```
+
+### Variables
+
+```{r Names, message = FALSE, warning = FALSE}
+colnames(df_cleaned)
+```
+
+The variables featured in this data visualization project are:
+
+1. user_id: ID of the driver
+2. kwh_total: kWh used for the charge                
+3. dollars: USD $ per charge
+4. charge_time_hrs: Hours spent charging
+5. weekday: Day of the week
+6. distance: Miles traveled to charging station
+7. mon: encoded 0 1
+8. tues: encoded 0 1
+9. wed: encoded 0 1
+10. thurs:encoded 0 1
+11. fri: encoded 0 1                      
+12. sat: encoded 0 1
+13. sun: encoded 0 1                      
+14. facility_type: Where charging took place (work)
+15. count: Number of trips by that User.
+16. Trips_To_Charging_Station: Binned a variable for easier use in the graph.
+* * *
+
+# Data Analysis
+
+## Required Analysis
+
+### Chart/Graph 
+
+```{r Heat Map, }
+binned_values <- cut(df_cleaned$count, breaks = 6)
+
+df_cleaned$Trips_To_Charging_Station <- cut(df_cleaned$count, 
+                                            breaks = 6, labels = c("Below 30 Trips", "30 to 60 Trips", "60 to 90 Trips", "90 - 130 Trips", "130 - 160 Trips", "Above 160 Trips"))
+
+df_summary <- df_cleaned %>%
+  group_by(Trips_To_Charging_Station) %>%
+  summarise(
+    monday = sum(mon == 1),
+    tuesday = sum(tues == 1),
+    wednessday = sum(wed == 1),
+    thursday = sum(thurs == 1),
+    friday = sum(fri == 1),
+    saturday = sum(sat == 1),
+    sunday = sum(sun == 1)
+  )
+
+df_long <- df_summary %>%
+  pivot_longer(cols = monday:sunday, names_to = "day", values_to = "count")
+
+
+heat_map <- ggplot(df_long, aes(x = day, y = Trips_To_Charging_Station, fill = count)) +
+  geom_tile() +
+  scale_fill_viridis() +  # Color scale for heatmap
+  labs(title = "Weekly Charging Activity of EV Drivers", x = "Day of the Week", y = "Trips To Charging Station") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("heat_map.png", plot = heat_map, width = 6, height = 4, dpi = 300)
+```
+
+```{r Scatter plot}
+df_cleaned$charge_time_hrs <- round(df_cleaned$charge_time_hrs, 2)
+df_cleaned <- df_cleaned %>%
+  filter(charge_time_hrs < 55)
+
+scatter_ev <- ggplot(df_cleaned, aes(x= kwh_total, y= charge_time_hrs)) + geom_point(color = "yellow2", size = 1.2) +
+  geom_smooth(method = "lm", se = FALSE, color = "springgreen3", size = 1.4) + labs(
+    title = "Relationship Between Total kWh and Charge Time",  
+    subtitle = "A plot showing the correlation between kWh total and charge time in hours",  
+    x = "Total kWh",
+    y = "Charge Time (hrs)"
+  ) + theme_dark(base_size = 14)
+
+ggsave("scatter_ev.png", plot = scatter_ev, width = 8, height = 4, dpi = 300)
+```
+
+```{r Donut Chart}
+df_pie <- df_cleaned %>%
+  group_by(weekday) %>%
+  summarise(
+    Overall_Charge_timeHrs = sum(charge_time_hrs)
+  )
+
+# Create the 3D pie chart using plot_ly
+donut_ev <- plot_ly(df_pie, labels = ~weekday, values = ~Overall_Charge_timeHrs, type = "pie", 
+        textinfo = "label+percent", rotation = 90, 
+        hole = 0.3,
+        marker = list(
+          colors = viridis::viridis(length(df_pie$Overall_Charge_timeHrs))  # Apply Viridis color scale
+        )) %>%
+  layout(
+    title = "Donut Chart of KWh in the Data Separated by Weekday", 
+    showlegend = TRUE,
+    scene = list(
+      camera = list(eye = list(x = 1, y = 1, z = 1))  # Controls the 3D view angle
+    ),
+    paper_bgcolor = "rgba(0,0,0,0)",  # Transparent background
+    plot_bgcolor = "rgba(0,0,0,0)"    # Transparent plot background
+  )
+
+saveWidget(donut_ev, "donutev_interactive.html")
+```
+
+```{r Hexbin Plot, }
+par(mar = c(5, 5, 2, 2))
+png("larger_hexbin_plot.png", width = 1000, height = 800, res = 100)
+bins = hexbin(df_cleaned$dollars, df_cleaned$distance, xbins = 20)
+smb = smooth.hexbin(bins)
+plot(smb, colramp = viridis, 
+     main = "Hex Plot of Price Per Charging vs Distance Traveled by Driver", 
+     xlab = "Distance Traveled in Miles", 
+     ylab = "Price of Charge in USD($)")
+
+```
+
+```{r Pyramid Plot}
+df_pyramid <- df_cleaned %>%
+  group_by(facility_type) %>%
+  summarise(
+    kWh = sum(kwh_total),
+    charge_time = sum(charge_time_hrs)
+  )
+
+png("pyramid_plot.png", width = 1000, height = 800, res = 100)
+pyramid.plot(df_pyramid$kWh, df_pyramid$charge_time,labels= df_pyramid$facility_type,
+unit = NA, gap = 0,laxlab=c(0,5,10,15),
+ raxlab=c(0,5,10,15), top.labels = c("Total Kilowatts (KWh)",
+ "Facility Type", "Time Spent Charging (Hours)"),lxcol = "darkseagreen3",rxcol = "khaki")
+```
+
+```{r}
+palette <- brewer.pal(n = 5, name = "Set3") 
+tm <- treemap(df_pyramid, 
+              index = c("facility_type", "kWh", "charge_time"), 
+              vSize = "charge_time",
+              vColor = "kWh",
+              palette = palette)
+png("treemap_plot.png", width = 800, height = 600)
+
+fig_tree <- plot_ly(
+  type = "treemap",
+  labels = df_pyramid$facility_type,
+  parents = df_pyramid$charge_time,
+  values = df_pyramid$charge_time,
+  textinfo = "label+value",
+  marker = list(colors = brewer.pal(5, "Set3"))
+)
+
+saveWidget(donut_ev, "donutev_interactive.html")
+```
+
+### Summary Statistics
+
+```{r, message = FALSE, warning = FALSE}
+favstats(df_cleaned$dollars)
+favstats(df_cleaned$kwh_total)
+favstats(df_cleaned$charge_time_hrs)
+```
+
+## Additional Analyses
+
+* * *
+
+# Option 1: Infographic Poster
+Attached your completed Infographic Poster as a PNG, JPEG, or PDF file attached to the file submission portal.
+
+<div style="position: relative; width: 100%; height: 0; padding-top: 250.0000%;
+ padding-bottom: 0; box-shadow: 0 2px 8px 0 rgba(63,69,81,0.16); margin-top: 1.6em; margin-bottom: 0.9em; overflow: hidden;
+ border-radius: 8px; will-change: transform;">
+  <iframe loading="lazy" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; border: none; padding: 0;margin: 0;"
+    src="https://www.canva.com/design/DAGYliqtvm0/6icMuNMkV6bsm6vkNiLRAg/view?embed" allowfullscreen="allowfullscreen" allow="fullscreen" data-external="1">
+  </iframe>
+</div>
+<a href="https:&#x2F;&#x2F;www.canva.com&#x2F;design&#x2F;DAGYliqtvm0&#x2F;6icMuNMkV6bsm6vkNiLRAg&#x2F;view?utm_content=DAGYliqtvm0&amp;utm_campaign=designshare&amp;utm_medium=embeds&amp;utm_source=link" target="_blank" rel="noopener">Electric Vehicles</a> by Tojaga M
+
+
+URL Link to Canva Viz Site: [Merim Tojaga - Data Viz Project 3](https://www.canva.com/design/DAGYliqtvm0/6icMuNMkV6bsm6vkNiLRAg/view)
+
+* * *
+
+# References
+
+1. https://search.r-project.org/CRAN/refmans/moderndive/html/ev_charging.html
+2. https://pod-point.com/guides/driver/how-long-to-charge-an-electric-car#:~:text=A%20typical%20electric%20car%20(60kWh,with%20a%2050kW%20rapid%20charger.
+3. https://www.nytimes.com/2022/09/01/us/california-heat-wave-flex-alert-ac-ev-charging.html
+
+* * *
+
+# All done!
+Knit the completed R Markdown file as a HTML document (click the "Knit" button at the top of the script editor window) and upload it to the submission portal on Canvas.
