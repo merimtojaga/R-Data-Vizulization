@@ -14,17 +14,17 @@ the infographic.
 
 ### Dependencies
 
-MacOS
-R (version 4.4.0)
-Rstudio
+- MacOS
+- R (version 4.4.0)
+- Rstudio
 
 ## Author
 
-Merim Tojaga
-tojaga.m@northeastern.edu
+- Merim Tojaga
+- tojaga.m@northeastern.edu
 
 ## Resources
 
-Completed under Katelyn Federico.
-5302 INSH - Northeastern University
+- Completed under Katelyn Federico.
+- 5302 INSH - Northeastern University
 
